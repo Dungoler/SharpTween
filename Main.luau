@@ -48,7 +48,7 @@
 		
 		Accesing the created tween on CustomTween objects with the property <code>_createdTween</code> is not 
 		advised as it can be replaced with a copy when calling some methods.
-
+		
 	GitHub Repository: https://github.com/Dungoler/SharpTween
 ]]
 
@@ -106,7 +106,7 @@ type InheritedMethods<self, n, m> = {
 	RandomizeProperties: typeof(
 		-- Randomizes the Tweening properties with the given percentage. The percentage is always relative to the default goals.
 		function(self: self, percentage: number) end),
-	Clone: CustomTweenFunction<self>,
+	Clone: (self: self) -> n,
 	Cancel: CustomTweenFunction<self>,
 	Pause: CustomTweenFunction<self>,
 	Play: CustomTweenFunction<self>,
@@ -373,9 +373,16 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 	end
 	
 	function self:Play()
+		print("qqq")
 		if #self.observedAttributes > 0 or self.isPreloadedRunning or playing then
 			return
 		end
+		
+		if element ~= self.Instance then
+			ReplaceTweenInfo(self, self.TweenInfo, propertyTable)
+			element = self.Instance
+		end
+		
 		playing = true
 		RegularAlpha = nil
 		lastPlayed = os.clock()
@@ -401,7 +408,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 			local eased = TweenService:GetValue(alpha, twinfo.EasingStyle, twinfo.EasingDirection)
 			local snapshot = {}
 			for property, goal in pairs(propertyTable) do
-				local start = (element :: any)[property]
+				local start = (self.Instance :: any)[property]
 				snapshot[property] = lerp(start, goal, eased)
 			end
 			self.frames[i] = snapshot
@@ -441,7 +448,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 				end
 				
 				for property, value in pairs(self.frames[i]) do
-					(element :: any)[property] = value
+					(self.Instance :: any)[property] = value
 				end
 				
 				self.PreloadedAlpha = i / #self.frames
