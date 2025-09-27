@@ -48,6 +48,8 @@
 		
 		Accesing the created tween on CustomTween objects with the property <code>_createdTween</code> is not 
 		advised as it can be replaced with a copy when calling some methods.
+
+	GitHub Repository: https://github.com/Dungoler/SharpTween
 ]]
 
 -----------------------------
