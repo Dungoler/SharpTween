@@ -693,6 +693,8 @@ function SharpTween.NewBezier(controlPoints: {{x: number, y: number}})
 		local n = #controlPoints - 1
 		local sum = 0
 		for i, point in ipairs(controlPoints) do
+			assert(point[coord], "x and y have to be numbers")
+
 			local coeff = binomial(n, i - 1) * ((1 - t)^(n - (i - 1))) * (t^(i - 1))
 			sum += point[coord] * coeff
 		end
