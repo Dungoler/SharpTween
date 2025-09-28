@@ -188,6 +188,24 @@ SharpTween:SetDefaultGroup(nil)
 local newTween3 = SharpTween:Create(TextLabel, twinfo, {Size = UDim2.fromScale(0, 1)})
 -- will not be added to the group automatically.
 ```
+**Bezier curves usage example**
+```luau
+local CustomTween = SharpTween:Create(Frame2, twinfo, {Position = UDim2.fromScale(0.9, Frame2.Position.Y.Scale)})
+
+-- cuadratic curve in this case
+CustomTween.Bezier = SharpTween.NewBezier({
+	{x=0, y=0},
+	{x=0.5, y=1},
+	{x=1, y=1},
+})
+
+CustomTween:Preload(120)
+
+-- PlayPreloaded() as inserting bezier curves in regular Tweens is not possible
+CustomTween:PlayPreloaded() 
+```
+> No limit on the amount of elements in the table!
+
 **AutoWait property usage example**
 ```luau
 Group.AutoWait = true
