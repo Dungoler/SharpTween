@@ -2,7 +2,7 @@
 **CONSTRUCTOR**
 
 ```luau
-Constructor.Init(): SharpTween
+Constructor.Init() SharpTween
 "Returns a SharpTween object"
 ```
 
@@ -18,17 +18,17 @@ NewCustomTween LemonSignal<CustomTween> LemonSignal.new()
 
 **SharpTween METHODS**
 ```luau
-Create(self: SharpTween, ...): CustomTween
+Create(self: SharpTween, ...) CustomTween
 "Creates a new CustomTween"
 ```
 
 ```luau
-new(self: SharpTween)
+new(self: SharpTween) ()
 "Returns a new group"
 ```
 
 ```luau
-SetDefaultGroup(group: CustomTweenGroup) any
+SetDefaultGroup(group: CustomTweenGroup) ()
 "Created CustomTweens will now be redirected to the given group"
 ```
 
