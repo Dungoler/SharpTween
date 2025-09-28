@@ -133,6 +133,7 @@ type CustomTweenProperties = {
 	GetPropertyChangedSignal: (self: CustomTween, property: "PlaybackState" | string) -> LemonSignal.Signal<>,
 	PropertyChangedSignals: {[string]: LemonSignal.Signal<>},
 	InitialTweenInfo: TweenInfo,
+	Bezier: (alpha: number) -> ()?
 }
 
 type GroupProperties = {
@@ -411,7 +412,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		for i = 1, steps do
 			local alpha = i / steps
 			-- easing aplicado
-			local eased = TweenService:GetValue(alpha, twinfo.EasingStyle, twinfo.EasingDirection)
+			local eased = if self.Bezier then self.Bezier(alpha) else TweenService:GetValue(alpha, twinfo.EasingStyle, twinfo.EasingDirection)
 			local snapshot = {}
 			for property, goal in pairs(propertyTable) do
 				local start = (self.Instance :: any)[property]
@@ -676,6 +677,46 @@ end
 -----------------------------
 -- PUBLIC FUNCTIONS --
 -----------------------------
+
+function SharpTween.NewBezier(controlPoints: {{x: number, y: number}})
+	-- binomial coefficient
+	local function binomial(n: number, k: number)
+		local res = 1
+		for i = 1, k do
+			res = res * (n - (k - i)) / i
+		end
+		return res
+	end
+
+	-- general Bezier polynomial
+	local function bezier1D(t: number, coord: string): number
+		local n = #controlPoints - 1
+		local sum = 0
+		for i, point in ipairs(controlPoints) do
+			local coeff = binomial(n, i - 1) * ((1 - t)^(n - (i - 1))) * (t^(i - 1))
+			sum += point[coord] * coeff
+		end
+		return sum
+	end
+
+	-- return easing function
+	return function(alpha: number): number
+		assert(alpha, "alpha has to be a number")
+
+		-- find param `t` such that bezierX(t) ~= alpha
+		-- approximate with Newton-Raphson
+		local t = alpha
+		for _ = 1, 6 do
+			local x = bezier1D(t, "x")
+			local dx = (bezier1D(t + 1e-5, "x") - bezier1D(t - 1e-5, "x")) / 2e-5
+			if dx == 0 then break end
+			t -= (x - alpha) / dx
+			if t < 0 then t = 0 elseif t > 1 then t = 1 end
+		end
+		-- evaluate y
+		return bezier1D(t, "y")
+	end
+end
 
 -- Automatically redirects all created CustomTweens to the given group. Useful for attribute observation without manually adding each CustomTween to the group.
 function SharpTween:SetDefaultGroup(Group: CustomTweenGroup)
