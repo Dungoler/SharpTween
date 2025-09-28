@@ -98,7 +98,7 @@ type InheritedMethods<self, n, m> = {
 		--->	<code>Alpha:</code> the eased alpha of the Tween obtained with the TweenInfo easing parameters.
 		--->	<code>Progress:</code> the progress or fixed alpha of the Tween (0..1).
 		--This does not reflect PlayPreloaded() progress (PreloadedAlpha property does).
-		function(self: self): m return nil :: any end),
+		function(self: self): (m, m) return nil :: any, nil :: any end),
 	SetAlpha: typeof(
 		-- Adjusts the Tween's time such that the given alpha corresponds to the new starting point. The alpha is always relative to the default <code>TweenInfo.Time</code>
 		-- CustomTween has to be preloaded manually to be affected.
@@ -106,6 +106,7 @@ type InheritedMethods<self, n, m> = {
 	RandomizeProperties: typeof(
 		-- Randomizes the Tweening properties with the given percentage. The percentage is always relative to the default goals.
 		function(self: self, percentage: number) end),
+	GetPropertyTable: (self: self) -> {[string]: any},
 	Clone: (self: self) -> n,
 	Cancel: CustomTweenFunction<self>,
 	Pause: CustomTweenFunction<self>,
@@ -126,7 +127,8 @@ type CustomTweenProperties = {
 	fps: number,
 	isPreloadedRunning: boolean,
 	manualCompletionSignal: LemonSignal.Signal<>,
-	PreloadedAlpha: number, --progress of preloaded playback (0..1)
+	PreloadedAlpha: number, -- alpha of preloaded playback
+	PreloadedProgress: number, -- progress of preloaded playback (0..1)
 	Completed: LemonSignal.Signal<>,
 	GetPropertyChangedSignal: (self: CustomTween, property: "PlaybackState" | string) -> LemonSignal.Signal<>,
 	PropertyChangedSignals: {[string]: LemonSignal.Signal<>},
@@ -269,7 +271,7 @@ end
 local function StartObservingAttribute(self: CustomTween, attribute: string)
 	local element = self.Instance
 	local trove = Trove.new()
-
+	
 	trove:Add(Observers.observeAttribute(element, attribute, function()
 		table.insert(self.observedAttributes, attribute)
 		self.newAttributeSignal:Fire(attribute)
@@ -362,6 +364,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		self.isPreloadedRunning = false
 		RegularAlpha, progress = self:GetAlpha()
 		self.PreloadedAlpha = 0
+		self.PreloadedProgress = 0
 		self._createdTween:Cancel()
 		-- self.Completed:Fire() Completed should already fire if the tween is cancelled
 	end
@@ -373,12 +376,11 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 	end
 	
 	function self:Play()
-		print("qqq")
 		if #self.observedAttributes > 0 or self.isPreloadedRunning or playing then
 			return
 		end
 		
-		if element ~= self.Instance then
+		if element ~= self.Instance or self.TweenInfo ~= self._createdTween.TweenInfo then
 			ReplaceTweenInfo(self, self.TweenInfo, propertyTable)
 			element = self.Instance
 		end
@@ -388,6 +390,10 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		lastPlayed = os.clock()
 		
 		self._createdTween:Play()
+	end
+	
+	function self:GetPropertyTable()
+		return propertyTable
 	end
 	
 	function self:Preload(fps: number?, overrides: boolean?)
@@ -442,17 +448,31 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		startingNumber = startingNumber > 0 and startingNumber or 1
 		
 		thread = task.spawn(function()
+			local amountToSkip = 0
+			
 			for i = startingNumber, #self.frames do
 				if not playing then
 					break
+				end
+				
+				local toWait = 1 / self.fps
+				
+				if amountToSkip > 0 then
+					amountToSkip -= toWait
+					continue
 				end
 				
 				for property, value in pairs(self.frames[i]) do
 					(self.Instance :: any)[property] = value
 				end
 				
-				self.PreloadedAlpha = i / #self.frames
-				task.wait(1 / self.fps)
+				self.PreloadedProgress = i / #self.frames
+				self.PreloadedAlpha = TweenService:GetValue(self.PreloadedProgress, twinfo.EasingStyle, twinfo.EasingDirection)
+				
+				local num = task.wait()
+				if num > (toWait * 1.084) then
+					amountToSkip += num - toWait
+				end
 			end
 			if playing then
 				self.Completed:Fire()
@@ -487,7 +507,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		local twinfo = self.TweenInfo
 		
 		if not lastPlayed then -- CustomTween has not been played yet
-			return 0
+			return 0, 0
 		end
 		
 		if RegularAlpha and progress then
@@ -540,6 +560,8 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		
 		if percentage == 0 then
 			propertyTable = table.clone(DefaultProperties)
+			ReplaceTweenInfo(self, self.TweenInfo, propertyTable)
+			return
 		end
 		
 		for property, value in pairs(DefaultProperties) do			
@@ -605,6 +627,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 			end
 			
 			propertyTable[property] = newValue
+			ReplaceTweenInfo(self, self.TweenInfo, propertyTable)
 		end
 	end
 	
@@ -629,21 +652,25 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 end
 
 local function IterateOverMethods(group: CustomTweenGroup, iteratedSignal: LemonSignal.Signal<>, key: string, ...)
-	local allReturnedValues = {}
+	local returnedValues = {}
+	local secondaryReturnedValues = {}
 	local args = {...}
 
 	task.defer(function()
 		for _, custom in pairs(group.GroupTweens) do
 			local func = custom[key]
-			local returnedValue = func(custom, table.unpack(args))
-			table.insert(allReturnedValues, returnedValue)
+			local returnedValue, returnedValue2 = func(custom, table.unpack(args))
+			if returnedValue2 then
+				table.insert(secondaryReturnedValues, returnedValue2)
+			end
+			table.insert(returnedValues, returnedValue)
 		end
 
 		group.isParsing = false
 		iteratedSignal:Fire()
 	end)
-
-	return if #allReturnedValues > 0 then allReturnedValues else nil
+	
+	return returnedValues, secondaryReturnedValues
 end
 
 -----------------------------
@@ -688,12 +715,11 @@ function SharpTween.new(): CustomTweenGroup
 				newGroup.isParsing = true
 				
 				return function(_, ...)
-					local value = IterateOverMethods(newGroup, iteratedSignal, key, ...)
+					local values, values2 = IterateOverMethods(newGroup, iteratedSignal, key, ...)
 					if newGroup.AutoWait then
 						newGroup:WaitTweens()
 					end
-					print(key)
-					return value
+					return values, values2
 				end
 			else
 				return rawget(tab, key)
@@ -761,11 +787,12 @@ function SharpTween:Create(instance: Instance & any, twinfo: TweenInfo, property
 	base.observedAttributes = {}
 	base.Instance = instance
 	base.PreloadedAlpha = 0
+	base.PreloadedProgress = 0
 	
-	base.StartObservingAttribute = function(attribute: string)
+	base.StartObservingAttribute = function(self, attribute: string)
 		StartObservingAttribute(base, attribute)
 	end
-	base.StopObservingAttribute = function(attribute: string)
+	base.StopObservingAttribute = function(self, attribute: string)
 		StopObservingAttribute(base, attribute)
 	end
 	
