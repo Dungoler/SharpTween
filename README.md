@@ -1,3 +1,12 @@
+<div align="center">
+	
+# SharpTween - Extended Tweening Library
+	
+<img width="690" height="180" alt="SharpTween logo sin fondo" src="https://github.com/user-attachments/assets/33765284-a1a3-4723-90d7-a3ae792cc134" 
+/>
+#### *Ilustration by [Doual Studio](https://www.instagram.com/doualstudio?igsh=dWJlNGJqdjAzbGlx)*
+</div>
+
 ## [See more - DevForum post](https://devforum.roblox.com/t/sharptween-extended-tweening-library/3962195)
 
 ### Documentation
@@ -9,6 +18,7 @@ Constructor.Init() SharpTween
 ```
 
 **SharpTween PROPERTIES**
+
 ```luau
 CustomTweens table {CustomTween}
 "Created CustomTweens are stored here"
