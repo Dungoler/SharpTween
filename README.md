@@ -1,3 +1,5 @@
+## [See more - DevForum post](https://devforum.roblox.com/t/sharptween-extended-tweening-library/3962195)
+
 ### Documentation
 **CONSTRUCTOR**
 
