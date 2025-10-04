@@ -73,7 +73,7 @@ type CustomTweenFunction<self> = (self: self) -> ()
 type InheritedMethods<self, n, m> = {
 	PlayPreloaded: typeof(
 		-- Plays from preloaded frames. <code>Play()</code> and <code>PlayPreloaded()</code> have no effect until the tween is stopped or canceled. Preload() should be called before executing. <strong>No tween object is used.</strong>
-		function(self: self, alpha: number?) end),
+		function(self: self, progress: number?) end),
 	Preload: typeof(
 		-- Builds frames using the current instance values (not the initial stored properties). Preloading with a different fps parameter replaces the old one.
 		function(self: self, fps: number?, overrides: boolean?) end),
@@ -100,12 +100,17 @@ type InheritedMethods<self, n, m> = {
 		--This does not reflect PlayPreloaded() progress (PreloadedAlpha property does).
 		function(self: self): (m, m) return nil :: any, nil :: any end),
 	SetAlpha: typeof(
-		-- Adjusts the Tween's time such that the given alpha corresponds to the new starting point. The alpha is always relative to the default <code>TweenInfo.Time</code>
+		-- Adjusts the Tween's time such that the given alpha corresponds to the new starting point. The alpha is always relative to the original <code>TweenInfo.Time</code>
 		-- CustomTween has to be preloaded manually to be affected.
 		function(self: self, alpha: number) end),
 	RandomizeProperties: typeof(
 		-- Randomizes the Tweening properties with the given percentage. The percentage is always relative to the default goals.
 		function(self: self, percentage: number) end),
+	AdjustMultiplier: typeof(
+		-- Sets the Tweening Speed Multiplier to the given number, relative to the original <code>TweenInfo.Time</code>.
+		-- The multiplier is persistent, and will keep multiplying even when calling CustomTween methods that modify the Tweening time such as <code>AdjustTime()</code> or <code>SetAlpha()</code>.
+		-- Default is 1
+		function(self: self, newMultiplier: number?) end),
 	GetPropertyTable: (self: self) -> {[string]: any},
 	Clone: (self: self) -> n,
 	Cancel: CustomTweenFunction<self>,
@@ -285,6 +290,30 @@ local function StartObservingAttribute(self: CustomTween, attribute: string)
 	self.observerSignals[attribute] = trove
 end
 
+-- binomial coefficient
+@native
+local function binomial(n: number, k: number)
+	local res = 1
+	for i = 1, k do
+		res = res * (n - (k - i)) / i
+	end
+	return res
+end
+
+-- general Bezier polynomial
+@native
+local function bezier1D(t: number, coord: string, controlPoints: {{x: number, y: number}}): number
+	local n = #controlPoints - 1
+	local sum = 0
+	for i, point in ipairs(controlPoints) do
+		assert(point[coord], "x and y have to be numbers")
+
+		local coeff = binomial(n, i - 1) * ((1 - t)^(n - (i - 1))) * (t^(i - 1))
+		sum += point[coord] * coeff
+	end
+	return sum
+end
+
 @native
 local function lerpNumber(a: number, b: number, alpha: number): number
 	return a + (b - a) * alpha
@@ -337,12 +366,11 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 	local playing = false
 	local RegularAlpha: number?, progress = 0, 0
 	local lastPlayed: number?
+	local speedMultiplier = 1
 	local thread: thread?
-	
-	self.Completed:Connect(function()
-		playing = false
-		self.isPreloadedRunning = false
-	end)
+	local waitSignal = LemonSignal.new()
+	local isPreloading = false
+	local hasToWait = false
 	
 	self.newAttributeSignal:Connect(function()
 		if #self.observedAttributes > 0 then
@@ -357,7 +385,7 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 
 	function self:Cancel()
 		if thread then
-			task.cancel(thread)
+			pcall(task.cancel, thread)
 			thread = nil
 		end
 		
@@ -393,6 +421,17 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		self._createdTween:Play()
 	end
 	
+	function self:AdjustMultiplier(newMultiplier: number?)
+		if newMultiplier then
+			assert(typeof(newMultiplier) == "number", "newMultiplier has to be a number or nil")
+		else
+			newMultiplier = 1
+		end
+		
+		speedMultiplier = newMultiplier :: number
+		self:AdjustTime(self.InitialTweenInfo.Time)
+	end
+	
 	function self:GetPropertyTable()
 		return propertyTable
 	end
@@ -424,18 +463,25 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		preloaded = true
 	end
 	
-	function self:PlayPreloaded(alpha: number?)
+	function self:PlayPreloaded(newProgress: number?, goalProgress: number?)
 		if #self.observedAttributes > 0 or playing then
 			return
 		end
 		
-		if alpha then
-			assert(typeof(alpha) == "number", "alpha has to be a number or nil")
+		if self.PreloadedProgress >= 1 then
+			self.PreloadedProgress = 0
+		end
+		
+		if newProgress then
+			assert(typeof(newProgress) == "number", "newProgress has to be a number or nil")
+		end
+		
+		if goalProgress then
+			assert(typeof(goalProgress) == "number", "goalProgress has to be a number or nil")
 		end
 		
 		local twinfo = self.TweenInfo
-		local alpha = alpha or self.PreloadedAlpha
-		local clampedAlpha = math.clamp(alpha, 0, 1)
+		local newProgress = newProgress or self.PreloadedProgress
 		
 		if not preloaded or not self.frames then
 			self:Preload()
@@ -445,17 +491,21 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 		playing = true
 		self.isPreloadedRunning = true
 		
-		local startingNumber = math.ceil(#self.frames * clampedAlpha)
+		local goalFrame = if goalProgress then math.ceil(#self.frames * goalProgress) else #self.frames
+		
+		local startingNumber = math.ceil(#self.frames * newProgress)
 		startingNumber = startingNumber > 0 and startingNumber or 1
 		
 		thread = task.spawn(function()
 			local amountToSkip = 0
 			
-			for i = startingNumber, #self.frames do
+			for i = startingNumber, goalFrame do
 				if not playing then
 					break
 				end
 				
+				self.PreloadedProgress = i / #self.frames
+				self.PreloadedAlpha = TweenService:GetValue(self.PreloadedProgress, twinfo.EasingStyle, twinfo.EasingDirection)
 				local toWait = 1 / self.fps
 				
 				if amountToSkip > 0 then
@@ -467,15 +517,15 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 					(self.Instance :: any)[property] = value
 				end
 				
-				self.PreloadedProgress = i / #self.frames
-				self.PreloadedAlpha = TweenService:GetValue(self.PreloadedProgress, twinfo.EasingStyle, twinfo.EasingDirection)
-				
 				local num = task.wait()
 				if num > (toWait * 1.084) then
 					amountToSkip += num - toWait
 				end
 			end
+			
 			if playing then
+				playing = false
+				self.isPreloadedRunning = false
 				self.Completed:Fire()
 			end
 		end)
@@ -486,14 +536,13 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 			return
 		end
 		
-		assert(typeof(alpha) == "number", "alpha has to be a number")
+		assert(typeof(progress) == "number", "alpha has to be a number")
 		
 		if not preloaded or not self.frames then
 			self:Preload()
 			warnAttempt("Tween is not preloaded. Preloading manually")
 		end
 		
-		alpha = alpha or 0
 		local clampedAlpha = math.clamp(alpha, 0, 1)
 
 		local index = math.ceil(#self.frames * clampedAlpha)
@@ -525,6 +574,8 @@ local function SetMainMethods(self: CustomTween, Class: SharpTween, propertyTabl
 	
 	function self:AdjustTime(newTime: number)
 		assert(typeof(newTime) == "number", "newTime has to be a number")
+		
+		newTime *= 1 / speedMultiplier
 		
 		local twinfo = self.TweenInfo
 		
@@ -679,44 +730,24 @@ end
 -----------------------------
 
 function SharpTween.NewBezier(controlPoints: {{x: number, y: number}})
-	-- binomial coefficient
-	local function binomial(n: number, k: number)
-		local res = 1
-		for i = 1, k do
-			res = res * (n - (k - i)) / i
-		end
-		return res
-	end
-
-	-- general Bezier polynomial
-	local function bezier1D(t: number, coord: string): number
-		local n = #controlPoints - 1
-		local sum = 0
-		for i, point in ipairs(controlPoints) do
-			assert(point[coord], "x and y have to be numbers")
-
-			local coeff = binomial(n, i - 1) * ((1 - t)^(n - (i - 1))) * (t^(i - 1))
-			sum += point[coord] * coeff
-		end
-		return sum
-	end
-
 	-- return easing function
-	return function(alpha: number): number
+	return 
+		@native 
+		function(alpha: number): number
 		assert(alpha, "alpha has to be a number")
 
 		-- find param `t` such that bezierX(t) ~= alpha
 		-- approximate with Newton-Raphson
 		local t = alpha
 		for _ = 1, 6 do
-			local x = bezier1D(t, "x")
-			local dx = (bezier1D(t + 1e-5, "x") - bezier1D(t - 1e-5, "x")) / 2e-5
+			local x = bezier1D(t, "x", controlPoints)
+			local dx = (bezier1D(t + 1e-5, "x", controlPoints) - bezier1D(t - 1e-5, "x", controlPoints)) / 2e-5
 			if dx == 0 then break end
 			t -= (x - alpha) / dx
 			if t < 0 then t = 0 elseif t > 1 then t = 1 end
 		end
 		-- evaluate y
-		return bezier1D(t, "y")
+		return bezier1D(t, "y", controlPoints)
 	end
 end
 
