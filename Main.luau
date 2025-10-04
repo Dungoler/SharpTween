@@ -73,7 +73,7 @@ type CustomTweenFunction<self> = (self: self) -> ()
 type InheritedMethods<self, n, m> = {
 	PlayPreloaded: typeof(
 		-- Plays from preloaded frames. <code>Play()</code> and <code>PlayPreloaded()</code> have no effect until the tween is stopped or canceled. Preload() should be called before executing. <strong>No tween object is used.</strong>
-		function(self: self, progress: number?) end),
+		function(self: self, newProgress: number?, goalProgress: number?) end),
 	Preload: typeof(
 		-- Builds frames using the current instance values (not the initial stored properties). Preloading with a different fps parameter replaces the old one.
 		function(self: self, fps: number?, overrides: boolean?) end),
