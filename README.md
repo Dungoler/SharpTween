@@ -200,7 +200,17 @@ SharpTween:SetDefaultGroup(nil)
 local newTween3 = SharpTween:Create(TextLabel, twinfo, {Size = UDim2.fromScale(0, 1)})
 -- will not be added to the group automatically.
 ```
-**Bezier curves usage example**
+**[ADDED] AdjustMultiplier() usage example**
+```luau
+local CustomTween = SharpTween:Create(Frame2, twinfo, {Position = UDim2.fromScale(0.9, Frame2.Position.Y.Scale)})
+
+CustomTween:AdjustMultiplier(2)
+CustomTween:Play()
+```
+
+> The Speed Multiplier can be changed while the CustomTween is playing! Works best in pair with PlayPreloaded(), as the easing isn't reset.
+
+**[ADDED] Bezier curves usage example**
 ```luau
 local CustomTween = SharpTween:Create(Frame2, twinfo, {Position = UDim2.fromScale(0.9, Frame2.Position.Y.Scale)})
 
@@ -216,6 +226,7 @@ CustomTween:Preload(120)
 -- PlayPreloaded() as inserting bezier curves in regular Tweens is not possible
 CustomTween:PlayPreloaded() 
 ```
+
 > No limit on the amount of elements in the table!
 
 **AutoWait property usage example**
