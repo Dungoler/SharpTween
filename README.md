@@ -86,7 +86,12 @@ newTween:PlayPreloaded()
 
 task.wait(1)
 
-newTween:PlayPreloaded() -- will work, no need to preload twice
+-- will work, no need to preload twice
+newTween:PlayPreloaded(0.1, 0.5) 
+-- the tweening will start at 0.1
+-- and stop when the progress hits 0.5
+```
+>Calling PlayPreloaded() when the CustomTween is already playing has no effect, just like a regular Tween. Setting a *goalProgress* as seen in the example (0.5) will fire the Completed Event after the progress is hit.
 ```
 >Calling PlayPreload() when the CustomTween is already playing has no effect, just like a regular Tween.
 
