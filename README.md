@@ -47,14 +47,14 @@ SetDefaultGroup(group: CustomTweenGroup) ()
 **CustomTween and CustomTweenGroup METHODS**
 ```luau
 type InheritedMethods<self> = {
-	PlayPreloaded: (self: self, alpha: number?) -> (),
+	PlayPreloaded: (self: self, newProgress: number?, goalProgress: number?) -> (),
 	Preload: (self: self, fps: number?, overrides: boolean?) -> (),
 	SetInstanceToAlpha: (self: self, alpha: number) -> (),
 	AdjustTime: (self: self, newTime: number) -> (),
 	AdjustDelayTime: (self: self, delayTime: number) -> (),
 	GetReverse: (self: self) -> CustomTween,
 	UpdateInitialProperties: (self: self) -> (),
-	GetAlpha: (self: self) -> number,
+	GetAlpha: (self: self) -> (number, number),
 	SetAlpha: (self: self, alpha: number) -> (),
 	RandomizeProperties: (self: self, percentage: number) -> (),
 	Clone: (self: self) -> (),
