@@ -46,6 +46,8 @@ SetDefaultGroup(group: CustomTweenGroup) ()
 
 **CustomTween and CustomTweenGroup METHODS**
 ```luau
+-- These types are a simplification of SharpTween's types for easy reading.
+
 type InheritedMethods<self> = {
 	PlayPreloaded: (self: self, newProgress: number?, goalProgress: number?) -> (),
 	Preload: (self: self, fps: number?, overrides: boolean?) -> (),
@@ -62,6 +64,15 @@ type InheritedMethods<self> = {
 	Pause: (self: self) -> (),
 	Play: (self: self) -> (),
 }
+
+type CustomTweenMethods = {
+	GetPropertyChangedSignal: (self: CustomTween, property: "PlaybackState" | string) -> LemonSignal.Signal<>,
+	GetProgressSignal: (self: CustomTween, progress: number) -> LemonSignal.Signal<>
+	StartObservingAttribute: (self: CustomTween, string) -> (),
+	StopObservingAttribute: (self: CustomTween, string) -> (),
+	Bezier: (number) -> ()
+}
+
 ```
 ### Examples
 **Creating a CustomTween**
@@ -267,7 +278,7 @@ newTween:Play()
 
 newTween.Completed:Wait()
 
-newTween.PlayPreloaded()
+newTween:PlayPreloaded()
 --[[ output:
 	1, 1
 	~0.784
