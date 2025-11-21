@@ -243,3 +243,34 @@ Group:Cancel() -- should not cause any issue. Yields too
 ```
 
 > Without AutoWait, the function WaitTweens() should be called after Play() to avoid issues.
+
+**Progress signal usage example**
+```luau
+local Frame = Instance.new("Frame")
+local twinfo = TweenInfo.new(1, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out)
+local goal = {Position = UDim2.fromScale(1, 1)}
+local newTween = SharpTween:Create(Frame, twinfo, goal)
+newwTween:Preload()
+
+newTween:GetProgressSignal(0.4):Connect(function()
+	print(newTween:GetAlpha())
+	print(newTween.PreloadedAlpha)
+	print(newTween.PreloadedProgress)
+end)
+
+newTween:Play()
+--[[ output:
+	~0.784, ~0.4,
+	0
+	0
+]]
+
+newTween.Completed:Wait()
+
+newTween.PlayPreloaded()
+--[[ output:
+	1, 1
+	~0.784
+	0.4
+]]
+```
